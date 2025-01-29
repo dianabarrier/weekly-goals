@@ -1,101 +1,192 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useEffect } from 'react';
+
+const categoryColors = {
+  'Health': 'bg-green-50 border-green-200',
+  'Home': 'bg-blue-50 border-blue-200',
+  'Finances': 'bg-purple-50 border-purple-200',
+  'Manage Possessions': 'bg-yellow-50 border-yellow-200',
+  'Personal Growth': 'bg-pink-50 border-pink-200',
+  'Relationships': 'bg-red-50 border-red-200',
+  'Faith': 'bg-indigo-50 border-indigo-200'
+};
+
+const categories = [
+  'Health',
+  'Home',
+  'Finances',
+  'Manage Possessions',
+  'Personal Growth',
+  'Relationships',
+  'Faith'
+];
+
+function getWeekDates() {
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(monday.getDate() - monday.getDay() + 1);
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  return { start: monday, end: sunday };
+}
+
+function getWeekKey(date: Date) {
+  const year = date.getFullYear();
+  const week = Math.floor((date.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return `${year}-week${week}`;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [currentWeek, setCurrentWeek] = useState(getWeekDates());
+  const [goals, setGoals] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const weekKey = getWeekKey(currentWeek.start);
+      const saved = localStorage.getItem(weekKey);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    }
+    return Object.fromEntries(
+      categories.map(category => [
+        category,
+        Array(5).fill({ text: '', completed: false })
+      ])
+    );
+  });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  // Save current week's goals to localStorage
+  useEffect(() => {
+    const weekKey = getWeekKey(currentWeek.start);
+    localStorage.setItem(weekKey, JSON.stringify(goals));
+  }, [goals, currentWeek]);
+
+  const handleWeekChange = (direction: 'prev' | 'next') => {
+    setCurrentWeek(prev => {
+      const newStart = new Date(prev.start);
+      const newEnd = new Date(prev.end);
+      const days = direction === 'next' ? 7 : -7;
+      newStart.setDate(newStart.getDate() + days);
+      newEnd.setDate(newEnd.getDate() + days);
+      
+      // When changing weeks, load that week's goals or create new ones
+      const newWeekKey = getWeekKey(newStart);
+      const savedGoals = localStorage.getItem(newWeekKey);
+      
+      if (savedGoals) {
+        setGoals(JSON.parse(savedGoals));
+      } else {
+        // If there are goals from previous week, carry over incomplete ones
+        const prevWeekKey = getWeekKey(prev.start);
+        const prevGoals = localStorage.getItem(prevWeekKey);
+        
+        if (direction === 'next' && prevGoals) {
+          const previousGoals = JSON.parse(prevGoals);
+          const newGoals = Object.fromEntries(
+            categories.map(category => [
+              category,
+              previousGoals[category]
+                .filter((goal: any) => !goal.completed)
+                .concat(Array(5).fill({ text: '', completed: false }))
+                .slice(0, 5)
+            ])
+          );
+          setGoals(newGoals);
+        } else {
+          // For previous weeks or if no previous goals, start fresh
+          setGoals(Object.fromEntries(
+            categories.map(category => [
+              category,
+              Array(5).fill({ text: '', completed: false })
+            ])
+          ));
+        }
+      }
+      
+      return { start: newStart, end: newEnd };
+    });
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleGoalChange = (category: string, index: number, value: string) => {
+    setGoals(prevGoals => ({
+      ...prevGoals,
+      [category]: prevGoals[category].map((goal: any, i: number) => 
+        i === index ? { ...goal, text: value } : goal
+      )
+    }));
+  };
+
+  const toggleComplete = (category: string, index: number) => {
+    setGoals(prevGoals => ({
+      ...prevGoals,
+      [category]: prevGoals[category].map((goal: any, i: number) => 
+        i === index ? { ...goal, completed: !goal.completed } : goal
+      )
+    }));
+  };
+
+  return (
+    <main className="max-w-4xl mx-auto p-6 bg-slate-50 min-h-screen">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-slate-800 mb-4">Weekly Goals Tracker</h1>
+        
+        <div className="inline-flex items-center space-x-4 bg-white p-3 rounded-lg shadow">
+          <button 
+            onClick={() => handleWeekChange('prev')}
+            className="text-slate-600 hover:text-slate-800 px-2"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            ←
+          </button>
+          
+          <span className="font-medium">
+            {formatDate(currentWeek.start)} - {formatDate(currentWeek.end)}
+          </span>
+          
+          <button 
+            onClick={() => handleWeekChange('next')}
+            className="text-slate-600 hover:text-slate-800 px-2"
           >
-            Read our docs
-          </a>
+            →
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {categories.map(category => (
+          <div key={category} className={`p-4 rounded-lg shadow-lg border-2 ${categoryColors[category]}`}>
+            <h2 className="text-xl font-semibold mb-4 text-slate-700">{category}</h2>
+            <div className="space-y-3">
+              {goals[category].map((goal: any, index: number) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={goal.completed}
+                    onChange={() => toggleComplete(category, index)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <input
+                    type="text"
+                    value={goal.text}
+                    onChange={(e) => handleGoalChange(category, index, e.target.value)}
+                    placeholder="Enter your goal..."
+                    className={`flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      goal.completed ? 'line-through text-gray-500 bg-gray-50' : 'bg-white'
+                    }`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </main>
   );
 }
