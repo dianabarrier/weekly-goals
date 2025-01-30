@@ -2,6 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 
+interface Goal {
+  text: string;
+  completed: boolean;
+}
+
+type GoalsType = {
+  [key: string]: Goal[];
+}
+
 const categoryColors = {
   'Health': 'bg-green-50 border-green-200',
   'Home': 'bg-blue-50 border-blue-200',
@@ -10,7 +19,7 @@ const categoryColors = {
   'Personal Growth': 'bg-pink-50 border-pink-200',
   'Relationships': 'bg-red-50 border-red-200',
   'Faith': 'bg-indigo-50 border-indigo-200'
-};
+} as const;
 
 const categories = [
   'Health',
@@ -20,7 +29,7 @@ const categories = [
   'Personal Growth',
   'Relationships',
   'Faith'
-];
+] as const;
 
 function getWeekDates() {
   const now = new Date();
@@ -31,18 +40,11 @@ function getWeekDates() {
   return { start: monday, end: sunday };
 }
 
-function getWeekKey(date: Date) {
-  const year = date.getFullYear();
-  const week = Math.floor((date.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
-  return `${year}-week${week}`;
-}
-
 export default function Home() {
   const [currentWeek, setCurrentWeek] = useState(getWeekDates());
-  const [goals, setGoals] = useState(() => {
+  const [goals, setGoals] = useState<GoalsType>(() => {
     if (typeof window !== 'undefined') {
-      const weekKey = getWeekKey(currentWeek.start);
-      const saved = localStorage.getItem(weekKey);
+      const saved = localStorage.getItem('weeklyGoals');
       if (saved) {
         return JSON.parse(saved);
       }
@@ -55,11 +57,9 @@ export default function Home() {
     );
   });
 
-  // Save current week's goals to localStorage
   useEffect(() => {
-    const weekKey = getWeekKey(currentWeek.start);
-    localStorage.setItem(weekKey, JSON.stringify(goals));
-  }, [goals, currentWeek]);
+    localStorage.setItem('weeklyGoals', JSON.stringify(goals));
+  }, [goals]);
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
     setCurrentWeek(prev => {
@@ -68,41 +68,6 @@ export default function Home() {
       const days = direction === 'next' ? 7 : -7;
       newStart.setDate(newStart.getDate() + days);
       newEnd.setDate(newEnd.getDate() + days);
-      
-      // When changing weeks, load that week's goals or create new ones
-      const newWeekKey = getWeekKey(newStart);
-      const savedGoals = localStorage.getItem(newWeekKey);
-      
-      if (savedGoals) {
-        setGoals(JSON.parse(savedGoals));
-      } else {
-        // If there are goals from previous week, carry over incomplete ones
-        const prevWeekKey = getWeekKey(prev.start);
-        const prevGoals = localStorage.getItem(prevWeekKey);
-        
-        if (direction === 'next' && prevGoals) {
-          const previousGoals = JSON.parse(prevGoals);
-          const newGoals = Object.fromEntries(
-            categories.map(category => [
-              category,
-              previousGoals[category]
-                .filter((goal: any) => !goal.completed)
-                .concat(Array(5).fill({ text: '', completed: false }))
-                .slice(0, 5)
-            ])
-          );
-          setGoals(newGoals);
-        } else {
-          // For previous weeks or if no previous goals, start fresh
-          setGoals(Object.fromEntries(
-            categories.map(category => [
-              category,
-              Array(5).fill({ text: '', completed: false })
-            ])
-          ));
-        }
-      }
-      
       return { start: newStart, end: newEnd };
     });
   };
@@ -118,7 +83,7 @@ export default function Home() {
   const handleGoalChange = (category: string, index: number, value: string) => {
     setGoals(prevGoals => ({
       ...prevGoals,
-      [category]: prevGoals[category].map((goal: any, i: number) => 
+      [category]: prevGoals[category].map((goal: Goal, i: number) => 
         i === index ? { ...goal, text: value } : goal
       )
     }));
@@ -127,7 +92,7 @@ export default function Home() {
   const toggleComplete = (category: string, index: number) => {
     setGoals(prevGoals => ({
       ...prevGoals,
-      [category]: prevGoals[category].map((goal: any, i: number) => 
+      [category]: prevGoals[category].map((goal: Goal, i: number) => 
         i === index ? { ...goal, completed: !goal.completed } : goal
       )
     }));
@@ -164,7 +129,7 @@ export default function Home() {
           <div key={category} className={`p-4 rounded-lg shadow-lg border-2 ${categoryColors[category]}`}>
             <h2 className="text-xl font-semibold mb-4 text-slate-700">{category}</h2>
             <div className="space-y-3">
-              {goals[category].map((goal: any, index: number) => (
+              {goals[category].map((goal: Goal, index: number) => (
                 <div key={index} className="flex items-center gap-2">
                   <input
                     type="checkbox"
